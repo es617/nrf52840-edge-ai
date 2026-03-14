@@ -1,0 +1,16 @@
+# editors
+*.swp
+*~
+
+# build
+/build*/
+__pycache__/
+.DS_Store
+/.ble_mcp/*
+/.cursor/*
+/.dbgprobe_mcp/traces/*
+.vscode/*
+/.serial_mcp/*
+
+# test data (Speech Commands dataset)
+/test_data/
