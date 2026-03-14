@@ -15,22 +15,23 @@ Registers used:
 
 import asyncio
 import struct
+
 from mcp.types import Tool
 
-from dbgprobe_mcp_server.helpers import _ok, _err
-from dbgprobe_mcp_server.state import ProbeState
 from dbgprobe_mcp_server.elf import resolve_symbol
+from dbgprobe_mcp_server.helpers import _err, _ok
+from dbgprobe_mcp_server.state import ProbeState
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEMCR       = 0xE000EDFC
-DWT_CTRL    = 0xE0001000
-DWT_CYCCNT  = 0xE0001004
+DEMCR = 0xE000EDFC
+DWT_CTRL = 0xE0001000
+DWT_CYCCNT = 0xE0001004
 
-TRCENA_BIT  = 1 << 24
-CYCCNTENA   = 1 << 0
+TRCENA_BIT = 1 << 24
+CYCCNTENA = 1 << 0
 
 DEFAULT_CPU_FREQ_MHZ = 64  # nRF52840, STM32F4, etc.
 
@@ -45,6 +46,7 @@ META = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _lookup(session, name):
     if session.elf is None:
@@ -96,6 +98,7 @@ async def _wait_halt(backend, timeout_s, poll_s=0.05):
         if st.get("state") == "halted":
             return st
     return None
+
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -192,6 +195,7 @@ TOOLS = [
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+
 
 async def handle_dwt_setup(state: ProbeState, args: dict) -> dict:
     session = state.get_session(args["session_id"])

@@ -16,11 +16,12 @@ Works with any firmware that exports these ELF symbols:
 """
 
 import struct
+
 from mcp.types import Tool
 
-from dbgprobe_mcp_server.helpers import _ok, _err
-from dbgprobe_mcp_server.state import ProbeState
 from dbgprobe_mcp_server.elf import resolve_symbol
+from dbgprobe_mcp_server.helpers import _err, _ok
+from dbgprobe_mcp_server.state import ProbeState
 
 META = {
     "description": "TFLite Micro plugin — inspect models, inject data, read inference results",
@@ -34,12 +35,14 @@ def _parse_labels(args):
     """Parse labels from args, falling back to DEFAULT_LABELS."""
     raw = args.get("labels", "")
     if raw:
-        return [l.strip() for l in raw.split(",")]
+        return [label.strip() for label in raw.split(",")]
     return DEFAULT_LABELS
+
 
 # ---------------------------------------------------------------------------
 # Helper: resolve an ELF symbol address
 # ---------------------------------------------------------------------------
+
 
 def _lookup(session, name):
     """Look up a symbol in the attached ELF. Returns (address, size) or None."""
@@ -262,6 +265,7 @@ TOOLS = [
 # Handlers
 # ---------------------------------------------------------------------------
 
+
 async def handle_model_info(state: ProbeState, args: dict) -> dict:
     session = state.get_session(args["session_id"])
     backend = session.backend
@@ -315,13 +319,15 @@ async def handle_arena_info(state: ProbeState, args: dict) -> dict:
     }
 
     if arena_used is not None and arena_used > 0:
-        result.update({
-            "used": arena_used,
-            "used_kb": f"{arena_used / 1024:.1f}",
-            "free": arena_size - arena_used,
-            "utilization_pct": f"{100 * arena_used / arena_size:.1f}",
-            "source": "arena_used_bytes()",
-        })
+        result.update(
+            {
+                "used": arena_used,
+                "used_kb": f"{arena_used / 1024:.1f}",
+                "free": arena_size - arena_used,
+                "utilization_pct": f"{100 * arena_used / arena_size:.1f}",
+                "source": "arena_used_bytes()",
+            }
+        )
     else:
         result["used"] = "unknown (tflm_arena_used not found or not initialized)"
 
@@ -396,7 +402,7 @@ async def handle_read_output(state: ProbeState, args: dict) -> dict:
     best_label = labels[best_idx] if best_idx < len(labels) else f"class_{best_idx}"
 
     categories = {}
-    for i, (raw, score) in enumerate(zip(raw_values, scores)):
+    for i, (raw, score) in enumerate(zip(raw_values, scores, strict=False)):
         label = labels[i] if i < len(labels) else f"class_{i}"
         categories[label] = {"raw_int8": raw, "score": round(score, 4)}
 
@@ -441,7 +447,7 @@ async def handle_infer(state: ProbeState, args: dict) -> dict:
     session = state.get_session(args["session_id"])
     backend = session.backend
 
-    status, err = await _trigger_inference(session, backend)
+    _status, err = await _trigger_inference(session, backend)
     if err:
         return _err("trigger_failed", err)
 
@@ -467,20 +473,20 @@ async def handle_write_input(state: ProbeState, args: dict) -> dict:
 
     write_result = None
 
-    if "file" in args and args["file"]:
+    if args.get("file"):
         import os
+
         fpath = args["file"]
         if not os.path.isfile(fpath):
             return _err("file_not_found", f"File not found: {fpath}")
         if fpath.endswith(".hex"):
-            with open(fpath, "r") as f:
+            with open(fpath) as f:
                 data = bytes.fromhex(f.read().strip())
         else:
             with open(fpath, "rb") as f:
                 data = f.read()
         if len(data) != input_size:
-            return _err("size_mismatch",
-                        f"File has {len(data)} bytes, need {input_size}")
+            return _err("size_mismatch", f"File has {len(data)} bytes, need {input_size}")
         await backend.mem_write(buf_ptr, data)
         write_result = _ok(
             written=len(data),
@@ -488,11 +494,10 @@ async def handle_write_input(state: ProbeState, args: dict) -> dict:
             source=os.path.basename(fpath),
         )
 
-    elif "data_hex" in args and args["data_hex"]:
+    elif args.get("data_hex"):
         data = bytes.fromhex(args["data_hex"])
         if len(data) != input_size:
-            return _err("size_mismatch",
-                        f"Data length {len(data)} != input size {input_size}")
+            return _err("size_mismatch", f"Data length {len(data)} != input size {input_size}")
         await backend.mem_write(buf_ptr, data)
         write_result = _ok(
             written=len(data),
@@ -540,18 +545,20 @@ async def handle_write_input(state: ProbeState, args: dict) -> dict:
 
     # Auto-trigger inference unless disabled
     if args.get("run_inference", True):
-        status, err = await _trigger_inference(session, backend)
+        _status, err = await _trigger_inference(session, backend)
         if err:
             write_result["inference_error"] = err
             return write_result
 
         # Read output and merge into result
         output = await handle_read_output(state, args)
-        write_result.update({
-            "predicted_class": output.get("predicted_class"),
-            "confidence": output.get("confidence"),
-            "categories": output.get("categories"),
-        })
+        write_result.update(
+            {
+                "predicted_class": output.get("predicted_class"),
+                "confidence": output.get("confidence"),
+                "categories": output.get("categories"),
+            }
+        )
 
     return write_result
 
@@ -655,7 +662,7 @@ async def handle_write_pcm(state: ProbeState, args: dict) -> dict:
     if len(raw_bytes) >= TARGET_BYTES:
         pcm_data = raw_bytes[:TARGET_BYTES]
     else:
-        pcm_data = raw_bytes + b'\x00' * (TARGET_BYTES - len(raw_bytes))
+        pcm_data = raw_bytes + b"\x00" * (TARGET_BYTES - len(raw_bytes))
 
     # Find PCM buffer symbol
     pcm_sym = _lookup(session, "tflm_pcm_buffer")
@@ -666,7 +673,7 @@ async def handle_write_pcm(state: ProbeState, args: dict) -> dict:
     await backend.mem_write(pcm_sym[0], pcm_data)
 
     # Trigger preprocess + inference
-    status, err = await _trigger_preprocess(session, backend)
+    _status, err = await _trigger_preprocess(session, backend)
     if err:
         return _err("trigger_failed", err)
 
@@ -704,10 +711,7 @@ async def handle_accuracy_test(state: ProbeState, args: dict) -> dict:
 
     # Which classes to test (optional filter)
     classes_arg = args.get("classes", "")
-    if classes_arg:
-        test_classes = [c.strip() for c in classes_arg.split(",")]
-    else:
-        test_classes = None  # all
+    test_classes = [c.strip() for c in classes_arg.split(",")] if classes_arg else None
 
     # Model labels — configurable via 'labels' parameter
     model_labels = _parse_labels(args)
@@ -773,7 +777,7 @@ async def handle_accuracy_test(state: ProbeState, args: dict) -> dict:
     scale = await _read_f32(backend, scale_sym[0])
     zp = await _read_i32(backend, zp_sym[0])
 
-    for i, (fpath, expected) in enumerate(samples):
+    for _i, (fpath, expected) in enumerate(samples):
         try:
             with wave.open(fpath, "rb") as wf:
                 if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
@@ -787,13 +791,13 @@ async def handle_accuracy_test(state: ProbeState, args: dict) -> dict:
         if len(raw) >= TARGET_BYTES:
             pcm_data = raw[:TARGET_BYTES]
         else:
-            pcm_data = raw + b'\x00' * (TARGET_BYTES - len(raw))
+            pcm_data = raw + b"\x00" * (TARGET_BYTES - len(raw))
 
         try:
             # Write PCM — same as write_pcm handler (no halt needed,
             # J-Link supports memory writes while target is running)
             await backend.mem_write(pcm_sym[0], pcm_data)
-            status, err = await _trigger_preprocess(session, backend)
+            _status, err = await _trigger_preprocess(session, backend)
             if err:
                 errors += 1
                 continue
@@ -809,19 +813,21 @@ async def handle_accuracy_test(state: ProbeState, args: dict) -> dict:
         predicted = model_labels[best_idx] if best_idx < len(model_labels) else f"class_{best_idx}"
         confidence = max(scores)
 
-        is_correct = (predicted == expected)
+        is_correct = predicted == expected
         if is_correct:
             correct += 1
         total += 1
         confusion[expected][predicted] += 1
 
-        results.append({
-            "file": os.path.basename(fpath),
-            "expected": expected,
-            "predicted": predicted,
-            "confidence": round(confidence, 4),
-            "correct": is_correct,
-        })
+        results.append(
+            {
+                "file": os.path.basename(fpath),
+                "expected": expected,
+                "predicted": predicted,
+                "confidence": round(confidence, 4),
+                "correct": is_correct,
+            }
+        )
 
     # Per-class accuracy
     per_class = {}
