@@ -1,6 +1,6 @@
 # Peripheral UART + Edge AI
 
-This project extends Nordic's [Peripheral UART](README.rst) Zephyr sample with on-device keyword spotting using TFLite Micro. The entire integration — from zero to working inference — was done in a single [Claude Code](https://claude.com/claude-code) session using the [debug probe MCP server](https://github.com/es617/dbgprobe-mcp-server). See the [blog post](https://es617.github.io/2026/03/16/edge-ai-mcp.html) for the full story.
+This project extends Nordic's [Peripheral UART](README.rst) Zephyr sample with on-device keyword spotting using TFLite Micro. The entire integration — from zero to working inference — was done in a single [Claude Code](https://claude.com/claude-code) session using the [debug probe MCP server](https://github.com/es617/dbgprobe-mcp-server). See the [blog post](https://es617.dev/2026/03/16/edge-ai-mcp.html) for the full story.
 
 ## What it does
 
